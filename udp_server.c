@@ -22,6 +22,7 @@ void prep_headers(struct rudp_header);
 struct sockaddr_in server_addr;
 struct sockaddr_in client_addr;
 int sock, port = 65000;
+int is_thread = -1;
 int client_addr_length;
 char request[MSS];// = "GET /persistent.txt HTTP/1.1\nHost: sadsa.dsadsa.com\nConnection: alive\n\n";
 char* response;
@@ -34,6 +35,18 @@ sender_state sender;
  * @return 1 upon normal exit
  **/
 
+void mark_ack(struct rudp_header header_info){
+  if(sender.next_byte_to_be_acked == header_info.ack_no){
+    sender.last_byte_acked = sender.next_byte_to_be_acked;
+    sender.next_byte_to_be_acked += PAYLOAD+1;
+    printf("ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
+    printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
+  }
+  else{
+    printf("OUT OF ORDER ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
+    printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
+  }
+}
 void print_header(struct rudp_header header_info){
  printf("ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
 }
@@ -46,7 +59,13 @@ void *poll_acks(){
  for(;;){
   received_bytes = recvfrom(sock,ack, MSS,0, (struct sockaddr*)&client_addr, &client_addr_length);
   header_info = getHeaderInfo(ack);
-  print_header(header_info);
+  if(header_info.ack==ACK){
+    mark_ack(header_info);
+  }
+  else{
+    printf("ERROR, NOT AN ACK RECEIVED\n");
+  }
+  //print_header(header_info);
  } 
 }
 
@@ -69,8 +88,11 @@ int main()
   received_bytes = recvfrom(sock, request, MSS,0, (struct sockaddr*)&client_addr, &client_addr_length);
   printf("the request is %s\n", request);
   get_file_name();
-  printf("filename is %s\n",file_name);
-  received_bytes = pthread_create(&thread1, NULL, poll_acks, NULL);
+  //printf("filename is %s\n",file_name);
+  if(is_thread==-1){
+   received_bytes = pthread_create(&thread1, NULL, poll_acks, NULL);
+   is_thread = 0;
+ }
   reply();
  }
  close(sock);
@@ -83,7 +105,7 @@ void reply()
  struct rudp_header header_info;
  header_info = getHeaderInfo(request);
  if(header_info.ack==1) {
-  print_header(header_info);
+  mark_ack(header_info);
   return;
  }
  printf("CLIENT HEADER-->aw %d\nseq no %d\nack %d\nack_no %d\n data len %d\n", header_info.adv_window, header_info.seq_no, header_info.ack, header_info.ack_no, header_info.data_length); 
@@ -118,7 +140,13 @@ void send_response(struct rudp_header header_info)
    strncat(response, &file_contents[sent_file_bytes], PAYLOAD);
    sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
    sent_file_bytes += PAYLOAD;
+   sender.next_byte += PAYLOAD+1;
    sender.last_byte_sent += MSS;
+   // if(sender.next_byte_to_be_acked == 0){
+   //  sender.next_byte_to_be_acked = sender.next_byte;
+   // } else if(sender.next_byte_to_be_acked == sender.next_byte){
+   //  sender.next_byte_to_be_acked = sender.next_byte;
+   // }
    free(response);
   }
  }

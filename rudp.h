@@ -5,6 +5,7 @@
 #define HEADER_LENGTH 10
 #define PAYLOAD 1463
 #define MSS PAYLOAD+HEADER_LENGTH
+#define ACK 1
 struct rudp_header{
  int ack;
  int ack_no;

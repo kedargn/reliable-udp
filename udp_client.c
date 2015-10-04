@@ -111,7 +111,7 @@ void send_ack(){
  unsigned char header[HEADER_LENGTH];
 
  ack_header.ack=1;
- ack_header.ack_no = receiver.last_byte_received+1;
+ ack_header.ack_no = receiver.next_byte_expected;
  ack_header.seq_no = sender.last_byte_sent+1;
  sender.last_byte_sent++;
  ack_header.data_length = 1;
