@@ -65,6 +65,7 @@ void receive_data()
 {
  struct rudp_header ack_header;
  struct rudp_header header_info;
+ int simulate=0;
  int length;
  int client_addr_length = sizeof(client_addr);
  int bytes_per_request=0;
@@ -76,9 +77,14 @@ void receive_data()
   print_header(header_info);
   receiver = update_receiver_state(receiver, header_info);
   if(header_info.ack != 1){
-   send_ack();
+    if(simulate++%3 == 0){
+      printf("****ACK WILL NOT BE SENT****\n");
+    }else{
+      send_ack();
+      printf("%s\n", &response[9]);
+    }
   }
-  //printf("%s\n", &response[9]);
+  printf("%s\n", &response[9]);
  }
 }
 

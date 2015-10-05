@@ -21,7 +21,7 @@ receiver_state update_receiver_state(receiver_state receiver, struct rudp_header
   if(receiver.next_byte_expected == header_info.seq_no){
   	//if(header_info.seq_no!=13176){                //TODO: REMOVE THIS
   	 receiver.next_byte_expected += header_info.data_length+1;
-   // }
+    //}
   }
   receiver.last_byte_read += header_info.data_length;
   receiver.last_byte_received += header_info.data_length;

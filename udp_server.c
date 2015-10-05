@@ -6,6 +6,7 @@
 #include<arpa/inet.h>
 #include<math.h>
 #include<pthread.h>
+#include<sys/time.h>
 #include"rudp.h"
 #include"sender.h"
 
@@ -22,7 +23,7 @@ void prep_headers(struct rudp_header);
 struct sockaddr_in server_addr;
 struct sockaddr_in client_addr;
 int sock, port = 65000;
-int is_thread = -1;
+int is_thread = -1, retransmit =-1;
 int client_addr_length;
 char request[MSS];// = "GET /persistent.txt HTTP/1.1\nHost: sadsa.dsadsa.com\nConnection: alive\n\n";
 char* response;
@@ -42,17 +43,18 @@ void mark_ack(struct rudp_header header_info){
     printf("ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
     printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
   }
-  else{
+  else {
     printf("OUT OF ORDER ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
     printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
   }
 }
 void print_header(struct rudp_header header_info){
- printf("ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
+ //printf("ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
 }
 
 
 void *poll_acks(){
+  printf("****NEW THREAD****\n");
  int received_bytes;
  unsigned char ack[MSS];
  struct rudp_header header_info;
@@ -86,14 +88,15 @@ int main()
  for(;;){
   printf("waiting to receive data from client \n");
   received_bytes = recvfrom(sock, request, MSS,0, (struct sockaddr*)&client_addr, &client_addr_length);
-  printf("the request is %s\n", request);
-  get_file_name();
-  //printf("filename is %s\n",file_name);
-  if(is_thread==-1){
-   received_bytes = pthread_create(&thread1, NULL, poll_acks, NULL);
-   is_thread = 0;
- }
-  reply();
+  if(received_bytes>0){//printf("the request is %s\n", request);
+    get_file_name();
+    //printf("filename is %s\n",file_name);
+    if(is_thread==-1){
+     //received_bytes = pthread_create(&thread1, NULL, poll_acks, NULL);
+     is_thread = 0;
+   }
+    reply();
+  }
  }
  close(sock);
  exit(1);
@@ -113,10 +116,36 @@ void reply()
  send_response(header_info);
 }
 
+int wait_for_an_ack(){
+  unsigned char ack_content[MSS];
+  int size;
+  struct rudp_header header_info;
+  struct timeval timeout;
+  timeout.tv_sec=3;
+  timeout.tv_usec = 0;
+  printf("ENTERED wait_for_ack()\n");
+
+  setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(struct timeval));
+  size = recvfrom(sock, ack_content, MSS,0, (struct sockaddr*)&client_addr, &client_addr_length);
+  if(size<=0){
+    printf("ACK SOCKET TIMEDOUT\n");
+    retransmit=0;
+    return -1;
+  }
+  else{
+    header_info = getHeaderInfo(ack_content);
+    retransmit = -1;                //not retransmitting this segment
+    if(header_info.ack==ACK){
+    mark_ack(header_info);
+    return 0;
+  }
+  }
+}
+
 
 void send_response(struct rudp_header header_info)
 {
- int client_addr_len,file_length, sent_file_bytes = 0, i=1;
+ int client_addr_len,file_length, sent_file_bytes = 0, i=1, timeout;
  initialize_state(&sender, NULL, 0);
  client_addr_len = sizeof(client_addr);
 //prep_headers(header_info);          //TODO:change fn dec
@@ -132,32 +161,36 @@ void send_response(struct rudp_header header_info)
  }
  else {
   while(sent_file_bytes <= file_length){
-  // prep_headers(header_info);
+    if(retransmit==0){
+      printf("RESENDING %d byte\n", sent_file_bytes);
+    }
    int rem_bytes = sent_file_bytes - strlen(file_contents);
    prepare_header(headers, sender, PAYLOAD,0);
    response = (char*)calloc(MSS, sizeof(char));
    strcat(response, headers);
    strncat(response, &file_contents[sent_file_bytes], PAYLOAD);
    sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
-   sent_file_bytes += PAYLOAD;
-   sender.next_byte += PAYLOAD+1;
-   sender.last_byte_sent += MSS;
-   // if(sender.next_byte_to_be_acked == 0){
-   //  sender.next_byte_to_be_acked = sender.next_byte;
-   // } else if(sender.next_byte_to_be_acked == sender.next_byte){
-   //  sender.next_byte_to_be_acked = sender.next_byte;
-   // }
+   
+   printf("calling wait_for_ack()");
+   timeout = wait_for_an_ack();
+   if(timeout==0){
+    sent_file_bytes+=PAYLOAD;
+   }
+   if(retransmit==-1){                  //not a retransmitted segment
+    sender.next_byte += PAYLOAD+1;
+    sender.last_byte_sent += MSS;
+   }
+   
+   //if(sender.next_byte_to_be_acked == header_info.ack_no){
+    
+   //}
    free(response);
   }
  }
  //free(response);
 }
 
-/**
- * Helper function to prep the HTTP response headers based on file_found and is_request_valid variables
- * @param file_found: Integer signifies whether requested file was found or not in server's directory. 0 if it is found. -1 if file not found.
- * @return: void
- **/
+
 void prep_headers(struct rudp_header header_info)
 {
  makeHeader(headers, header_info); //TODO:change header values
@@ -166,7 +199,7 @@ void prep_headers(struct rudp_header header_info)
 /**
  * Helper function to read the requested file.
  * The file contents will be copied to file_contents variable. 
- * Based on the size of file, the file_contents variable size will be dynamically increased so that it never runs out of memeory
+ * Based on the size of file, the file_contents variable size will be dynamically increased so that it never runs out of memory
  **/
 void read_file()
 {
