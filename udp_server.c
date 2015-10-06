@@ -19,7 +19,7 @@ void read_file();
 int get_file_name();
 void send_response(struct rudp_header);
 void prep_headers(struct rudp_header);
-
+void mark_ack(struct rudp_header);
 struct sockaddr_in server_addr;
 struct sockaddr_in client_addr;
 int sock, port = 65000;
@@ -32,22 +32,6 @@ char* file_contents;
 sender_state sender;
 
 
-void mark_ack(struct rudp_header header_info){
-  if(sender.next_byte_to_be_acked == header_info.ack_no){
-    sender.last_byte_acked = sender.next_byte_to_be_acked;
-    sender.next_byte_to_be_acked += PAYLOAD+1;
-    printf("ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
-    printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
-  }
-  else {
-    printf("OUT OF ORDER ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
-    printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
-  }
-}
-void print_header(struct rudp_header header_info){
- //printf("ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
-}
-
 
 void *poll_acks(){
   printf("****NEW THREAD****\n");
@@ -58,7 +42,7 @@ void *poll_acks(){
    received_bytes = recvfrom(sock,ack, MSS,0, (struct sockaddr*)&client_addr, &client_addr_length);
    header_info = getHeaderInfo(ack);
    if(header_info.ack==ACK){
-    mark_ack(header_info);
+    //mark_ack(header_info);
    }
   else{
     printf("ERROR, NOT AN ACK RECEIVED\n");
@@ -112,6 +96,33 @@ void reply()
  send_response(header_info);
 }
 
+void transmit(int index, int retransmit){
+  prepare_header(headers, sender, PAYLOAD, retransmit);
+  response = (char*)calloc(MSS, sizeof(char));
+  strcat(response, headers);
+  strncat(response, &file_contents[index], PAYLOAD);
+  sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr)); 
+}
+
+void mark_ack(struct rudp_header header_info){
+  if(sender.next_byte_to_be_acked == header_info.ack_no){
+    sender.last_byte_acked = sender.next_byte_to_be_acked;
+    sender.last_file_byte_acked += PAYLOAD;
+    sender.next_byte_to_be_acked += PAYLOAD+1;
+    printf("ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
+    printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
+  }
+  else {
+    printf("OUT OF ORDER ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
+    printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
+    transmit(sender.last_file_byte_acked, 1);
+    wait_for_an_ack();
+  }
+}
+void print_header(struct rudp_header header_info){
+ //printf("ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
+}
+
 int wait_for_an_ack(){
   unsigned char ack_content[MSS];
   int size;
@@ -125,16 +136,26 @@ int wait_for_an_ack(){
   size = recvfrom(sock, ack_content, MSS,0, (struct sockaddr*)&client_addr, &client_addr_length);
   if(size<=0){
     printf("ACK SOCKET TIMEDOUT\n");
-    retransmit=0;
+    transmit(sender.last_file_byte_acked,1);
+    wait_for_an_ack();
     return -1;
   }
   else{
     header_info = getHeaderInfo(ack_content);
     retransmit = -1;                //not retransmitting this segment
     if(header_info.ack==ACK){
-    mark_ack(header_info);
-    return 0;
-  }
+     if(sender.next_byte_to_be_acked == header_info.ack_no) {
+      mark_ack(header_info);
+      return 0;
+    } else{
+      printf("OUT OF ORDER ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
+      printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
+      printf("Retransmitting byte %d\n", sender.last_file_byte_acked);
+      transmit(sender.last_file_byte_acked,1);
+      wait_for_an_ack();
+      return -1;
+    }
+   }
   }
 }
 
@@ -157,25 +178,32 @@ void send_response(struct rudp_header header_info)
  }
  else {
   while(sent_file_bytes <= file_length){
-    if(retransmit==0){
-      printf("RESENDING %d byte\n", sent_file_bytes);
-    }
-
-   prepare_header(headers, sender, PAYLOAD,0);
-   response = (char*)calloc(MSS, sizeof(char));
-   strcat(response, headers);
-   strncat(response, &file_contents[sent_file_bytes], PAYLOAD);
-   sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
-   
-   printf("calling wait_for_ack()");
-   timeout = wait_for_an_ack();
-   if(timeout==0){
-    sent_file_bytes+=PAYLOAD;
-   }
-   if(retransmit==-1){                  //not a retransmitted segment
+   //  if(retransmit==0){
+   //    printf("RESENDING %d byte\n", sender.next_byte_to_be_acked);
+   //  }
+   // prepare_header(headers, sender, PAYLOAD,0);
+   // response = (char*)calloc(MSS, sizeof(char));
+   // strcat(response, headers);
+   // strncat(response, &file_contents[sent_file_bytes], PAYLOAD);
+   // sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
+   for(i=0;i<3;i++){
+    transmit(sent_file_bytes, 0);
     sender.next_byte += PAYLOAD+1;
-    sender.last_byte_sent += MSS;
-   }
+    sent_file_bytes+=PAYLOAD;
+   } 
+   
+   for(i=0;i<3;i++){
+    printf("calling wait_for_ack()");
+    timeout = wait_for_an_ack();
+  }
+   // if(timeout==0){
+   //  sent_file_bytes+=PAYLOAD;
+   // }
+   // if(retransmit==-1){
+   //  sender.last_file_byte_acked += PAYLOAD;                  //not a retransmitted segment
+   //  sender.next_byte += PAYLOAD+1;
+   //  sender.last_byte_sent += MSS;
+   // }
    
    //if(sender.next_byte_to_be_acked == header_info.ack_no){
     

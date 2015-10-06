@@ -75,16 +75,29 @@ void receive_data()
   response[MSS+1]='\0';
   header_info = getHeaderInfo(response);
   print_header(header_info);
-  receiver = update_receiver_state(receiver, header_info);
-  if(header_info.ack != 1){
-    if(simulate++%3 == 0){
-      printf("****ACK WILL NOT BE SENT****\n");
-    }else{
-      send_ack();
-      printf("%s\n", &response[9]);
+  printf("NEXT EXPECTED BYTE %d\n", receiver.next_byte_expected);
+  if(receiver.next_byte_expected == header_info.seq_no){
+    // receiver = update_receiver_state(receiver, header_info);
+    if(header_info.ack != 1){
+      //printf("X is %d\n", simulate);
+      if(simulate++>3 && simulate <10){
+        printf("****ACK WILL NOT BE SENT****\n");
+      }else{
+        receiver = update_receiver_state(receiver, header_info);
+        send_ack();
+        //printf("%s\n", &response[9]);
+      }
     }
   }
-  printf("%s\n", &response[9]);
+    //printf("%s\n", &response[9]);
+   else if(receiver.next_byte_expected > header_info.seq_no){
+    printf("ALREADY RECEIVED SEGMENT\n");
+    print_header(header_info);
+  } else{
+    printf("OUT OF ORDER SEGMENT. SENDING DUPLICATE ACK\n");
+    print_header(header_info);
+    send_ack();
+   }
  }
 }
 
