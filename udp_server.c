@@ -30,11 +30,7 @@ char* response;
 char file_name[50], headers[50];
 char* file_contents;
 sender_state sender;
-/**
- * creates and binds the socket
- * @param void
- * @return 1 upon normal exit
- **/
+
 
 void mark_ack(struct rudp_header header_info){
   if(sender.next_byte_to_be_acked == header_info.ack_no){
@@ -55,15 +51,15 @@ void print_header(struct rudp_header header_info){
 
 void *poll_acks(){
   printf("****NEW THREAD****\n");
- int received_bytes;
- unsigned char ack[MSS];
- struct rudp_header header_info;
- for(;;){
-  received_bytes = recvfrom(sock,ack, MSS,0, (struct sockaddr*)&client_addr, &client_addr_length);
-  header_info = getHeaderInfo(ack);
-  if(header_info.ack==ACK){
+  int received_bytes;
+  unsigned char ack[MSS];
+  struct rudp_header header_info;
+  for(;;){
+   received_bytes = recvfrom(sock,ack, MSS,0, (struct sockaddr*)&client_addr, &client_addr_length);
+   header_info = getHeaderInfo(ack);
+   if(header_info.ack==ACK){
     mark_ack(header_info);
-  }
+   }
   else{
     printf("ERROR, NOT AN ACK RECEIVED\n");
   }
@@ -121,7 +117,7 @@ int wait_for_an_ack(){
   int size;
   struct rudp_header header_info;
   struct timeval timeout;
-  timeout.tv_sec=3;
+  timeout.tv_sec = 3;
   timeout.tv_usec = 0;
   printf("ENTERED wait_for_ack()\n");
 
@@ -145,7 +141,7 @@ int wait_for_an_ack(){
 
 void send_response(struct rudp_header header_info)
 {
- int client_addr_len,file_length, sent_file_bytes = 0, i=1, timeout;
+ int client_addr_len,file_length, sent_file_bytes = 0, i = 1, timeout;
  initialize_state(&sender, NULL, 0);
  client_addr_len = sizeof(client_addr);
 //prep_headers(header_info);          //TODO:change fn dec
@@ -164,7 +160,7 @@ void send_response(struct rudp_header header_info)
     if(retransmit==0){
       printf("RESENDING %d byte\n", sent_file_bytes);
     }
-   int rem_bytes = sent_file_bytes - strlen(file_contents);
+
    prepare_header(headers, sender, PAYLOAD,0);
    response = (char*)calloc(MSS, sizeof(char));
    strcat(response, headers);
