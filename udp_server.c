@@ -22,7 +22,8 @@ void prep_headers(struct rudp_header);
 void mark_ack(struct rudp_header);
 struct sockaddr_in server_addr;
 struct sockaddr_in client_addr;
-int sock, port = 65000;
+
+int sock, port = 65000, client_window;
 int is_thread = -1, retransmit =-1;
 int client_addr_length;
 char request[MSS];// = "GET /persistent.txt HTTP/1.1\nHost: sadsa.dsadsa.com\nConnection: alive\n\n";
@@ -87,6 +88,7 @@ void reply()
 {
  struct rudp_header header_info;
  header_info = getHeaderInfo(request);
+ client_window = header_info.adv_window;
  if(header_info.ack==1) {
   mark_ack(header_info);
   return;
@@ -116,7 +118,7 @@ void mark_ack(struct rudp_header header_info){
     printf("OUT OF ORDER ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
     printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
     transmit(sender.last_file_byte_acked, 1);
-    wait_for_an_ack();
+    //wait_for_an_ack();
   }
 }
 void print_header(struct rudp_header header_info){
@@ -128,7 +130,7 @@ int wait_for_an_ack(){
   int size;
   struct rudp_header header_info;
   struct timeval timeout;
-  timeout.tv_sec = 3;
+  timeout.tv_sec = 1;
   timeout.tv_usec = 0;
   printf("ENTERED wait_for_ack()\n");
 
@@ -137,22 +139,23 @@ int wait_for_an_ack(){
   if(size<=0){
     printf("ACK SOCKET TIMEDOUT\n");
     transmit(sender.last_file_byte_acked,1);
-    wait_for_an_ack();
+    //wait_for_an_ack();
     return -1;
   }
   else{
     header_info = getHeaderInfo(ack_content);
+    client_window = header_info.adv_window;
     retransmit = -1;                //not retransmitting this segment
     if(header_info.ack==ACK){
      if(sender.next_byte_to_be_acked == header_info.ack_no) {
       mark_ack(header_info);
       return 0;
-    } else{
+    }else {
       printf("OUT OF ORDER ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
       printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
       printf("Retransmitting byte %d\n", sender.last_file_byte_acked);
       transmit(sender.last_file_byte_acked,1);
-      wait_for_an_ack();
+      //wait_for_an_ack();
       return -1;
     }
    }
@@ -178,41 +181,34 @@ void send_response(struct rudp_header header_info)
  }
  else {
   while(sent_file_bytes <= file_length){
-   //  if(retransmit==0){
-   //    printf("RESENDING %d byte\n", sender.next_byte_to_be_acked);
-   //  }
-   // prepare_header(headers, sender, PAYLOAD,0);
-   // response = (char*)calloc(MSS, sizeof(char));
-   // strcat(response, headers);
-   // strncat(response, &file_contents[sent_file_bytes], PAYLOAD);
-   // sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
-   for(i=0;i<3;i++){
-    transmit(sent_file_bytes, 0);
-    sender.next_byte += PAYLOAD+1;
-    sent_file_bytes+=PAYLOAD;
+   for(i=0;i<client_window;i++){
+   // if((sender.next_byte_to_be_acked - sender.last_byte_acked) > PAYLOAD){
+    if(sent_file_bytes <= file_length){
+      printf("sending file byte %d\n", sent_file_bytes);
+      transmit(sent_file_bytes, 0);
+      sender.next_byte += PAYLOAD+1;
+      sent_file_bytes+=PAYLOAD;
+      sender.last_byte_sent += PAYLOAD;
+    }
    } 
    
-   for(i=0;i<3;i++){
-    printf("calling wait_for_ack()");
+   for(i=0;i<client_window && sender.last_file_byte_acked <= sent_file_bytes;i++){
+    // /printf("calling wait_for_ack()");
+      timeout = wait_for_an_ack();
+   }
+
+   while(sender.last_file_byte_acked <= sent_file_bytes){
+    printf("window is %d\n",client_window);
+    printf("sender.last_file_byte_acked --> %d sent_file_bytes --> %d\n", sender.last_file_byte_acked, sent_file_bytes);
     timeout = wait_for_an_ack();
+   } 
   }
-   // if(timeout==0){
-   //  sent_file_bytes+=PAYLOAD;
-   // }
-   // if(retransmit==-1){
-   //  sender.last_file_byte_acked += PAYLOAD;                  //not a retransmitted segment
-   //  sender.next_byte += PAYLOAD+1;
-   //  sender.last_byte_sent += MSS;
-   // }
-   
-   //if(sender.next_byte_to_be_acked == header_info.ack_no){
-    
-   //}
-   free(response);
+  free(response);
+  exit(1);
   }
  }
  //free(response);
-}
+
 
 
 void prep_headers(struct rudp_header header_info)

@@ -8,13 +8,16 @@ typedef struct receiver_state_vars{
  int last_byte_received;
  int last_byte_acked;
  int last_byte_read;
- int next_byte_expected;          //next byte client is expecting to receive
+ int next_byte_expected;
+ int adv_window;
+ int current_window;          //next byte client is expecting to receive
 }receiver_state;
 
 void initialize_receiver(receiver_state *receiver){
   receiver->next_byte_expected = 0;
   receiver->last_byte_received = 0;
   receiver->last_byte_acked = receiver->last_byte_read = 0;
+  receiver->adv_window = receiver->current_window = 8;
 }
 
 receiver_state update_receiver_state(receiver_state receiver, struct rudp_header header_info ){
@@ -23,6 +26,7 @@ receiver_state update_receiver_state(receiver_state receiver, struct rudp_header
   	 receiver.next_byte_expected += header_info.data_length+1;
   	 receiver.last_byte_read += header_info.data_length;
      receiver.last_byte_received += header_info.data_length;
+     receiver.current_window = (receiver.adv_window - (receiver.last_byte_read - receiver.last_byte_received)/PAYLOAD);
     //}
   }
   

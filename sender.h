@@ -27,7 +27,6 @@ void initialize_state(sender_state *sender,char*  destn_ip, int destn_port){
  sender->last_byte_acked = 0;
  sender->next_byte_to_be_acked=PAYLOAD+1;
  sender->last_byte_sent = 0;
- sender->last_byte_sent = 0;
  sender->last_file_byte_acked = 0;
  //sender->destn_addr.sin_family = PF_INET;
  //sender->destn_addr.sin_port = htons(destn_port);
@@ -47,7 +46,7 @@ struct rudp_header create_header_info(sender_state state, int data_length, int r
  header_info.ack_no = 0; //TODO:
  header_info.seq_no = (retransmit == 0 ?state.next_byte : state.last_byte_acked); //(state.next_byte == 0 ? 0 : state.next_byte);
  header_info.data_length = data_length;
- header_info.adv_window = 1234; //TODO
+ header_info.adv_window = 5; //TODO
  return header_info;
 }
 /**

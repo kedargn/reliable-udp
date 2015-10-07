@@ -80,12 +80,12 @@ void receive_data()
     // receiver = update_receiver_state(receiver, header_info);
     if(header_info.ack != 1){
       //printf("X is %d\n", simulate);
-      if(simulate++>3 && simulate <10){
+      if(simulate++%3==0){
         printf("****ACK WILL NOT BE SENT****\n");
       }else{
         receiver = update_receiver_state(receiver, header_info);
         send_ack();
-        //printf("%s\n", &response[9]);
+        printf("%s\n", &response[9]);
       }
     }
   }
@@ -134,7 +134,7 @@ void send_ack(){
  ack_header.seq_no = sender.last_byte_sent+1;
  sender.last_byte_sent++;
  ack_header.data_length = 1;
- ack_header.adv_window=1234;
+ ack_header.adv_window= receiver.current_window;
  makeHeader(header, ack_header);
  printf("***sending following ack***\n");
  print_header(ack_header);
