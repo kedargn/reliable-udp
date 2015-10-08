@@ -17,12 +17,11 @@ sender_state sender;
 receiver_state receiver;
 
 struct sockaddr_in server_addr, client_addr;
-char file_name[50] = "hello.txt";
+char file_name[50] = "hello.txt", destn_file_name[50]="destn.txt";
 int sock, total_bytes_received=0, port;
+char* file_contents;
 unsigned char request[100], response[MSS+1], server_ip[30]="127.0.0.1";
 
-
-//extern sender_state  initialize_state(sender_state, char*, char* );
 
 int main(int argc, char* argv[])
 {
@@ -41,17 +40,7 @@ int main(int argc, char* argv[])
 
 void send_data(){
  unsigned char header[HEADER_LENGTH];
- /*struct rudp_header header_info;
- header_info.ack_no = 12345;
- header_info.ack=2;
- header_info.seq_no = 7891;
- header_info.adv_window = 7070;
- header_info.data_length = 8729;
- */
- //printf("aw %d\nseq no %d\nack %d\nack_no %d\n data len %d\n", header_info.adv_window, header_info.seq_no, header_info.ack, header_info.ack_no, header_info.data_length);
-
  prepare_header(header, sender, strlen(file_name), 0);
- //send_data_to(sock, sender, header, file_name);
  header[HEADER_LENGTH] = '\0';
  strcat(request, header);
  printf("header length %d\n",(int)strlen(header));
@@ -63,6 +52,10 @@ void send_data(){
 
 void receive_data()
 {
+ //file_name = (char*)malloc()
+ FILE *fp;
+ printf("File delete result is %d\n",remove(destn_file_name));
+ fp = fopen(destn_file_name, "a");
  struct rudp_header ack_header;
  struct rudp_header header_info;
  int simulate=0;
@@ -80,11 +73,14 @@ void receive_data()
     // receiver = update_receiver_state(receiver, header_info);
     if(header_info.ack != 1){
       //printf("X is %d\n", simulate);
-      if(simulate++%3==0){
+      if(nextBool(0.4)==0){
+        sleep(0.5);
         printf("****ACK WILL NOT BE SENT****\n");
       }else{
         receiver = update_receiver_state(receiver, header_info);
         send_ack();
+        fputs(&response[9], fp);
+
         printf("%s\n", &response[9]);
       }
     }
@@ -99,6 +95,7 @@ void receive_data()
     send_ack();
    }
  }
+ fclose(fp);
 }
 
 void print_header(struct rudp_header header_info){

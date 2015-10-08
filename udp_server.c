@@ -99,11 +99,15 @@ void reply()
 }
 
 void transmit(int index, int retransmit){
-  prepare_header(headers, sender, PAYLOAD, retransmit);
-  response = (char*)calloc(MSS, sizeof(char));
-  strcat(response, headers);
-  strncat(response, &file_contents[index], PAYLOAD);
-  sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr)); 
+  if(nextBool(0.5)==0){
+    prepare_header(headers, sender, PAYLOAD, retransmit);
+    response = (char*)calloc(MSS, sizeof(char));
+    strcat(response, headers);
+    strncat(response, &file_contents[index], PAYLOAD);
+    sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr)); 
+ } else {
+  printf("LET US SKIP\n");
+ }
 }
 
 void mark_ack(struct rudp_header header_info){
@@ -168,7 +172,6 @@ void send_response(struct rudp_header header_info)
  int client_addr_len,file_length, sent_file_bytes = 0, i = 1, timeout;
  initialize_state(&sender, NULL, 0);
  client_addr_len = sizeof(client_addr);
-//prep_headers(header_info);          //TODO:change fn dec
  response = (char*)calloc(MSS, sizeof(char));
  file_length = strlen(file_contents);
 
@@ -182,18 +185,16 @@ void send_response(struct rudp_header header_info)
  else {
   while(sent_file_bytes <= file_length){
    for(i=0;i<client_window;i++){
-   // if((sender.next_byte_to_be_acked - sender.last_byte_acked) > PAYLOAD){
     if(sent_file_bytes <= file_length){
       printf("sending file byte %d\n", sent_file_bytes);
       transmit(sent_file_bytes, 0);
       sender.next_byte += PAYLOAD+1;
-      sent_file_bytes+=PAYLOAD;
+      sent_file_bytes += PAYLOAD;
       sender.last_byte_sent += PAYLOAD;
     }
    } 
    
    for(i=0;i<client_window && sender.last_file_byte_acked <= sent_file_bytes;i++){
-    // /printf("calling wait_for_ack()");
       timeout = wait_for_an_ack();
    }
 

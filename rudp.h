@@ -62,6 +62,11 @@ struct rudp_header getHeaderInfo(char *bytes){
  return header_info;
 }
 
+int nextBool(double probability)
+{
+  return rand() <  probability * ((double)RAND_MAX + 1.0) ? 0 : -1;
+}
+
 
 #endif
 
