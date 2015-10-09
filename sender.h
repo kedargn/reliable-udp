@@ -44,7 +44,7 @@ struct rudp_header create_header_info(sender_state state, int data_length, int r
  struct rudp_header header_info;
  header_info.ack = 2;
  header_info.ack_no = 0; //TODO:
- header_info.seq_no = (retransmit == 0 ?state.next_byte : state.last_byte_acked); //(state.next_byte == 0 ? 0 : state.next_byte);
+ header_info.seq_no = (retransmit == 0 ?(state.next_byte%SEQ_WRAP_UP) : (state.last_byte_acked%SEQ_WRAP_UP)); //(state.next_byte == 0 ? 0 : state.next_byte);
  header_info.data_length = data_length;
  header_info.adv_window = 5; //TODO
  return header_info;

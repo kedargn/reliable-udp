@@ -7,6 +7,7 @@
 #include<math.h>
 #include<pthread.h>
 #include<sys/time.h>
+#include<math.h>
 #include"rudp.h"
 #include"sender.h"
 
@@ -23,7 +24,8 @@ void mark_ack(struct rudp_header);
 struct sockaddr_in server_addr;
 struct sockaddr_in client_addr;
 
-int sock, port = 65000, client_window;
+int sock, port = 65000, client_window=50*PAYLOAD, cong_window=1*PAYLOAD;
+int congestion_state = SLOW_START, ssthresh = 14630;
 int is_thread = -1, retransmit =-1;
 int client_addr_length;
 char request[MSS];// = "GET /persistent.txt HTTP/1.1\nHost: sadsa.dsadsa.com\nConnection: alive\n\n";
@@ -88,7 +90,7 @@ void reply()
 {
  struct rudp_header header_info;
  header_info = getHeaderInfo(request);
- client_window = header_info.adv_window;
+ //client_window = header_info.adv_window;
  if(header_info.ack==1) {
   mark_ack(header_info);
   return;
@@ -99,7 +101,7 @@ void reply()
 }
 
 void transmit(int index, int retransmit){
-  if(nextBool(0.5)==0){
+  if(1==1){ //nextBool(0.5)==0
     prepare_header(headers, sender, PAYLOAD, retransmit);
     response = (char*)calloc(MSS, sizeof(char));
     strcat(response, headers);
@@ -110,17 +112,45 @@ void transmit(int index, int retransmit){
  }
 }
 
+void increment_cong_window(){
+  float increment;
+  if(congestion_state == SLOW_START){
+    cong_window += PAYLOAD;
+    printf("IN SLOW START\n");
+    printf("Congestion window is %d\n", cong_window);
+    printf("Congestion window is %d and sstresh is %d\n", cong_window, ssthresh);
+    if(cong_window >= ssthresh){
+      printf("SWITCHING TO CONGESTION AVOIDANCE\n");
+      printf("Congestion window is %d and sstresh is %d\n", cong_window, ssthresh);
+      congestion_state = CONGESTION_AVOIDANCE;
+    }
+  } else if(congestion_state == CONGESTION_AVOIDANCE){
+    printf("NOW in CONGESTION_AVOIDANCE\n");
+    increment = ((float)PAYLOAD/cong_window)*PAYLOAD;
+    cong_window += ceil(increment);
+    printf("Congestion window is %d and sstresh is %d\n", cong_window, ssthresh);
+  }
+}
+
+void go_to_slow_start(){
+  ssthresh = (cong_window)/2;
+  cong_window = 1*PAYLOAD;
+  printf("SWITCHING to SLOW START\n");
+  printf("Congestion window is %d and sstresh is %d\n", cong_window, ssthresh);
+}
+
 void mark_ack(struct rudp_header header_info){
-  if(sender.next_byte_to_be_acked == header_info.ack_no){
+  if(sender.next_byte_to_be_acked%SEQ_WRAP_UP == header_info.ack_no){
+    increment_cong_window();
     sender.last_byte_acked = sender.next_byte_to_be_acked;
     sender.last_file_byte_acked += PAYLOAD;
     sender.next_byte_to_be_acked += PAYLOAD+1;
-    printf("ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
-    printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
+    //printf("ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
+    //printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
   }
   else {
-    printf("OUT OF ORDER ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
-    printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
+    //printf("OUT OF ORDER ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
+    //printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
     transmit(sender.last_file_byte_acked, 1);
     //wait_for_an_ack();
   }
@@ -141,23 +171,23 @@ int wait_for_an_ack(){
   setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(struct timeval));
   size = recvfrom(sock, ack_content, MSS,0, (struct sockaddr*)&client_addr, &client_addr_length);
   if(size<=0){
-    printf("ACK SOCKET TIMEDOUT\n");
+    printf("ACK SOCKET TIMEDOUT for %d byte\n",sender.last_file_byte_acked);
     transmit(sender.last_file_byte_acked,1);
-    //wait_for_an_ack();
+    go_to_slow_start();
     return -1;
   }
   else{
     header_info = getHeaderInfo(ack_content);
-    client_window = header_info.adv_window;
+    //client_window = header_info.adv_window;
     retransmit = -1;                //not retransmitting this segment
     if(header_info.ack==ACK){
-     if(sender.next_byte_to_be_acked == header_info.ack_no) {
+     if(sender.next_byte_to_be_acked%SEQ_WRAP_UP == header_info.ack_no) {
       mark_ack(header_info);
       return 0;
     }else {
-      printf("OUT OF ORDER ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
-      printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
-      printf("Retransmitting byte %d\n", sender.last_file_byte_acked);
+      // printf("OUT OF ORDER ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
+      // printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
+      // printf("Retransmitting byte %d\n", sender.last_file_byte_acked);
       transmit(sender.last_file_byte_acked,1);
       //wait_for_an_ack();
       return -1;
@@ -166,9 +196,13 @@ int wait_for_an_ack(){
   }
 }
 
+int min(){
+  return cong_window > client_window ? client_window/PAYLOAD : cong_window/PAYLOAD;
+}
 
 void send_response(struct rudp_header header_info)
 {
+  int temp;
  int client_addr_len,file_length, sent_file_bytes = 0, i = 1, timeout;
  initialize_state(&sender, NULL, 0);
  client_addr_len = sizeof(client_addr);
@@ -184,7 +218,7 @@ void send_response(struct rudp_header header_info)
  }
  else {
   while(sent_file_bytes <= file_length){
-   for(i=0;i<client_window;i++){
+   for(i=0;i<min();i++){
     if(sent_file_bytes <= file_length){
       printf("sending file byte %d\n", sent_file_bytes);
       transmit(sent_file_bytes, 0);
@@ -193,14 +227,14 @@ void send_response(struct rudp_header header_info)
       sender.last_byte_sent += PAYLOAD;
     }
    } 
-   
-   for(i=0;i<client_window && sender.last_file_byte_acked <= sent_file_bytes;i++){
+   temp = min();
+   for(i=0;i<temp && sender.last_file_byte_acked <= sent_file_bytes;i++){
       timeout = wait_for_an_ack();
    }
 
-   while(sender.last_file_byte_acked <= sent_file_bytes){
-    printf("window is %d\n",client_window);
-    printf("sender.last_file_byte_acked --> %d sent_file_bytes --> %d\n", sender.last_file_byte_acked, sent_file_bytes);
+   while(sender.last_file_byte_acked < sent_file_bytes){
+    //printf("window is %d\n",client_window);
+    //printf("sender.last_file_byte_acked --> %d sent_file_bytes --> %d\n", sender.last_file_byte_acked, sent_file_bytes);
     timeout = wait_for_an_ack();
    } 
   }

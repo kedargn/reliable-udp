@@ -17,7 +17,7 @@ sender_state sender;
 receiver_state receiver;
 
 struct sockaddr_in server_addr, client_addr;
-char file_name[50] = "hello.txt", destn_file_name[50]="destn.txt";
+char file_name[50] = "cn2.txt", destn_file_name[50]="destn.txt";
 int sock, total_bytes_received=0, port;
 char* file_contents;
 unsigned char request[100], response[MSS+1], server_ip[30]="127.0.0.1";
@@ -68,20 +68,19 @@ void receive_data()
   response[MSS+1]='\0';
   header_info = getHeaderInfo(response);
   print_header(header_info);
-  printf("NEXT EXPECTED BYTE %d\n", receiver.next_byte_expected);
-  if(receiver.next_byte_expected == header_info.seq_no){
+  printf("NEXT EXPECTED BYTE %d and ack no%d\n", receiver.next_byte_expected, receiver.next_byte_expected%SEQ_WRAP_UP);
+  if((receiver.next_byte_expected%SEQ_WRAP_UP) == (header_info.seq_no%SEQ_WRAP_UP)){
     // receiver = update_receiver_state(receiver, header_info);
     if(header_info.ack != 1){
       //printf("X is %d\n", simulate);
-      if(nextBool(0.4)==0){
+      if(1==0){ //nextBool(0.4)==0
         sleep(0.5);
         printf("****ACK WILL NOT BE SENT****\n");
       }else{
         receiver = update_receiver_state(receiver, header_info);
         send_ack();
         fputs(&response[9], fp);
-
-        printf("%s\n", &response[9]);
+        // /printf("%s\n", &response[9]);
       }
     }
   }
@@ -89,6 +88,7 @@ void receive_data()
    else if(receiver.next_byte_expected > header_info.seq_no){
     printf("ALREADY RECEIVED SEGMENT\n");
     print_header(header_info);
+    send_ack();
   } else{
     printf("OUT OF ORDER SEGMENT. SENDING DUPLICATE ACK\n");
     print_header(header_info);
@@ -127,7 +127,7 @@ void send_ack(){
  unsigned char header[HEADER_LENGTH];
 
  ack_header.ack=1;
- ack_header.ack_no = receiver.next_byte_expected;
+ ack_header.ack_no = receiver.next_byte_expected%SEQ_WRAP_UP;
  ack_header.seq_no = sender.last_byte_sent+1;
  sender.last_byte_sent++;
  ack_header.data_length = 1;
