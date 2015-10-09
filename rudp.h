@@ -2,10 +2,14 @@
 #define RUDP_H
 
 #include<stdio.h>
+#include<math.h>
 #define HEADER_LENGTH 10
 #define PAYLOAD 1463
 #define MSS PAYLOAD+HEADER_LENGTH
 #define ACK 1
+#define SLOW_START 5
+#define CONGESTION_AVOIDANCE 6
+#define SEQ_WRAP_UP 60025
 struct rudp_header{
  int ack;
  int ack_no;
@@ -18,8 +22,8 @@ void insertBytes(int header_value,unsigned char *header, int first_byte, int sec
  int a=0,b=0,c=0;
  a = (header_value & 65280)>>8;
  b = (header_value & 255);
- a = a == 0 ? -1:a;
- b = b == 0 ? -1:b;
+ //a = a == 0 ? -1:a;
+ //b = b == 0 ? -1:b;
  //printf("headervalue %d the value is %d and %d\n",header_value,a,b);
  header[first_byte]=a;
  header[second_byte]=b;
@@ -38,15 +42,15 @@ void makeHeader(unsigned char* header, struct rudp_header header_info){
 int getBytes(unsigned char* bytes,int first_byte_pos, int second_byte_pos){
  int c, d;
  c = bytes[first_byte_pos];
- if(c==255)
-  c=0;
+ // if(c==255)
+ //  c=0;
  //printf("\n first byte %d", c);
  if(first_byte_pos == second_byte_pos)
   return c;
  c=c<<8;
  d = bytes[second_byte_pos];
- if(d==255)
-  d=0; 
+ // if(d==255)
+ //  d=0; 
  c = c|(d);
  //printf("\n second byte %d and result %d\n",d,c);
  return c;

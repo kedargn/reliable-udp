@@ -101,11 +101,13 @@ void reply()
 }
 
 void transmit(int index, int retransmit){
-  if(1==1){ //nextBool(0.5)==0
+  if(nextBool(0.005)==0){ //nextBool(0.5)==0
     prepare_header(headers, sender, PAYLOAD, retransmit);
     response = (char*)calloc(MSS, sizeof(char));
-    strcat(response, headers);
-    strncat(response, &file_contents[index], PAYLOAD);
+    // strcat(response, headers);
+    // strncat(response, &file_contents[index], PAYLOAD);
+    memcpy(response, headers, HEADER_LENGTH);
+    memcpy(&response[HEADER_LENGTH], &file_contents[index], PAYLOAD);
     sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr)); 
  } else {
   printf("LET US SKIP\n");
@@ -209,10 +211,12 @@ void send_response(struct rudp_header header_info)
  response = (char*)calloc(MSS, sizeof(char));
  file_length = strlen(file_contents);
 
- if(file_length<=PAYLOAD){			//TODO: Might cause silly window syndrome
+ if(file_length<=PAYLOAD){
   prepare_header(headers, sender, strlen(file_contents),0);
-  strcat(response, headers);
-  strcat(response, file_contents);
+  // strcat(response, headers);
+  // strcat(response, file_contents);
+  memcpy(response, headers, HEADER_LENGTH);
+  memcpy(&response[HEADER_LENGTH], file_contents, strlen(file_contents));
   sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
   sender.last_byte_sent += MSS;
  }

@@ -42,11 +42,13 @@ void send_data(){
  unsigned char header[HEADER_LENGTH];
  prepare_header(header, sender, strlen(file_name), 0);
  header[HEADER_LENGTH] = '\0';
- strcat(request, header);
- printf("header length %d\n",(int)strlen(header));
- strcat(request, file_name);
- printf("request length %d\n", (int)strlen(request));
- sendto(sock, request, strlen(request), 0, (struct sockaddr*)&server_addr, sizeof(server_addr)); 
+ // strcat(request, header);
+ // printf("header length %d\n",(int)strlen(header));
+ // strcat(request, file_name);
+ // printf("request length %d\n", (int)strlen(request));
+ memcpy(request, header, HEADER_LENGTH);
+ memcpy(&request[HEADER_LENGTH], file_name, strlen(file_name));
+ sendto(sock, request, MSS, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)); 
  sender = update_sender(sender, strlen(header)+strlen(file_name));
 }
 
@@ -73,14 +75,15 @@ void receive_data()
     // receiver = update_receiver_state(receiver, header_info);
     if(header_info.ack != 1){
       //printf("X is %d\n", simulate);
-      if(1==0){ //nextBool(0.4)==0
+      if(nextBool(0.005)==0){ //nextBool(0.4)==0
         sleep(0.5);
         printf("****ACK WILL NOT BE SENT****\n");
       }else{
         receiver = update_receiver_state(receiver, header_info);
         send_ack();
-        fputs(&response[9], fp);
-        // /printf("%s\n", &response[9]);
+        fputs(&response[10], fp);
+        fflush(fp);
+        printf("%s\n", &response[10]);
       }
     }
   }
@@ -135,5 +138,5 @@ void send_ack(){
  makeHeader(header, ack_header);
  printf("***sending following ack***\n");
  print_header(ack_header);
- sendto(sock, header, strlen(header), 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
+ sendto(sock, header, HEADER_LENGTH, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
 }
