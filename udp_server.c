@@ -204,11 +204,20 @@ int wait_for_an_ack(){
       mark_ack(header_info);
       return 0;
     }else {
-      // printf("OUT OF ORDER ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, eof %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.eof);
-      // printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
-      // printf("Retransmitting byte %d\n", sender.last_file_byte_acked);
-      transmit(sender.last_file_byte_acked,1);
-      //wait_for_an_ack();
+      if(sender.dup_ack_byte !=-1){
+        sender.dup_ack_byte = header_info.ack_no;
+        sender.dup_acks++;
+      }else if(sender.dup_ack_byte == header_info.ack_no) {
+        sender.dup_acks++;
+      }else{
+       sender.dup_ack_byte = header_info.ack_no; 
+       sender.dup_acks = 1;
+      }
+      if(sender.dup_acks == 3){
+        transmit(sender.last_file_byte_acked,1);
+        sender.dup_acks = 0;
+        sender.dup_ack_byte = -1;
+      }
       return -1;
     }
    }

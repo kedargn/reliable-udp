@@ -12,6 +12,8 @@ typedef struct sender_state_variables{
  int last_byte_sent;
  int last_file_byte_acked;
  int next_byte;
+ int dup_acks;
+ int dup_ack_byte;
  int eof;
 }sender_state;
 
@@ -41,7 +43,8 @@ void initialize_state(sender_state *sender,char*  destn_ip, int destn_port){
  sender->last_byte_acked = 0;
  sender->next_byte_to_be_acked=PAYLOAD+1;
  sender->last_byte_sent = 0;
- sender->last_file_byte_acked = 0;
+ sender->last_file_byte_acked = sender->dup_acks = 0;
+ sender->dup_ack_byte = -1;
  sender->eof=0;
 }
 
