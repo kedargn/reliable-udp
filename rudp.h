@@ -14,7 +14,7 @@ struct rudp_header{
  int ack;
  int ack_no;
  int seq_no;
- int adv_window;
+ int eof;
  int data_length;
 };
 
@@ -31,7 +31,7 @@ void insertBytes(int header_value,unsigned char *header, int first_byte, int sec
 
 void makeHeader(unsigned char* header, struct rudp_header header_info){
  //unsigned char header[9];
- insertBytes(header_info.adv_window, header,0,1);
+ insertBytes(header_info.eof, header,0,1);
  insertBytes(header_info.seq_no, header,2,3);
  insertBytes(header_info.ack, header, 4, 4);
  insertBytes(header_info.ack_no,header, 5, 6);
@@ -58,7 +58,7 @@ int getBytes(unsigned char* bytes,int first_byte_pos, int second_byte_pos){
 
 struct rudp_header getHeaderInfo(char *bytes){
  struct rudp_header header_info;
- header_info.adv_window = getBytes(bytes, 0, 1);
+ header_info.eof = getBytes(bytes, 0, 1);
  header_info.seq_no = getBytes(bytes, 2, 3);
  header_info.ack = getBytes(bytes, 4, 4);
  header_info.ack_no = getBytes(bytes,5, 6);
@@ -68,7 +68,7 @@ struct rudp_header getHeaderInfo(char *bytes){
 
 int nextBool(double probability)
 {
-  return rand() <  probability * ((double)RAND_MAX + 1.0) ? 0 : -1;
+  return rand() >  probability * ((double)RAND_MAX) ? 0 : -1;
 }
 
 

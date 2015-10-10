@@ -42,10 +42,6 @@ void send_data(){
  unsigned char header[HEADER_LENGTH];
  prepare_header(header, sender, strlen(file_name), 0);
  header[HEADER_LENGTH] = '\0';
- // strcat(request, header);
- // printf("header length %d\n",(int)strlen(header));
- // strcat(request, file_name);
- // printf("request length %d\n", (int)strlen(request));
  memcpy(request, header, HEADER_LENGTH);
  memcpy(&request[HEADER_LENGTH], file_name, strlen(file_name));
  sendto(sock, request, MSS, 0, (struct sockaddr*)&server_addr, sizeof(server_addr)); 
@@ -75,7 +71,7 @@ void receive_data()
     // receiver = update_receiver_state(receiver, header_info);
     if(header_info.ack != 1){
       //printf("X is %d\n", simulate);
-      if(nextBool(0.005)==0){ //nextBool(0.4)==0
+      if(1==0){ //nextBool(0.4)==0
         sleep(0.5);
         printf("****ACK WILL NOT BE SENT****\n");
       }else{
@@ -83,7 +79,12 @@ void receive_data()
         send_ack();
         fputs(&response[10], fp);
         fflush(fp);
-        printf("%s\n", &response[10]);
+        // /printf("%s\n", &response[10]);
+        if(header_info.eof != 0){
+          fclose(fp);
+          printf("File Transfer Completed: %s\n", file_name);
+          exit(1);
+        }
       }
     }
   }
@@ -91,7 +92,7 @@ void receive_data()
    else if(receiver.next_byte_expected > header_info.seq_no){
     printf("ALREADY RECEIVED SEGMENT\n");
     print_header(header_info);
-    send_ack();
+    //send_ack();
   } else{
     printf("OUT OF ORDER SEGMENT. SENDING DUPLICATE ACK\n");
     print_header(header_info);
@@ -102,7 +103,7 @@ void receive_data()
 }
 
 void print_header(struct rudp_header header_info){
- printf("ack %d, ack_no %d,seq_no %d, data_length %d, adv_window %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.adv_window);
+ printf("ack %d, ack_no %d,seq_no %d, data_length %d, eof %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.eof);
 }
 void create_socket()
 {
@@ -134,7 +135,7 @@ void send_ack(){
  ack_header.seq_no = sender.last_byte_sent+1;
  sender.last_byte_sent++;
  ack_header.data_length = 1;
- ack_header.adv_window= receiver.current_window;
+ ack_header.eof = 10;
  makeHeader(header, ack_header);
  printf("***sending following ack***\n");
  print_header(ack_header);
