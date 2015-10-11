@@ -27,7 +27,7 @@ struct sockaddr_in server_addr;
 struct sockaddr_in client_addr;
 
 int sock, port = 65000, client_window=50*PAYLOAD, cong_window=1*PAYLOAD;
-int congestion_state = SLOW_START, ssthresh = 14630;
+int congestion_state = SLOW_START, ssthresh = 64000;
 int is_thread = -1, retransmit =-1;
 int client_addr_length, drtt = 0, ertt = 0, file_length = 0;
 char request[MSS];// = "GET /persistent.txt HTTP/1.1\nHost: sadsa.dsadsa.com\nConnection: alive\n\n";
@@ -42,6 +42,9 @@ float drop_probability = 0.0;
 
 int skipped = 0, not_skipped=0;
 
+/**
+ * checks and assigns the command line arguments
+ */
 void read_args(int argc, char *argv[]){
   if(argc != 4){
     printf("Invalid number of arguements\n. Please enter port no., client window and drop probability\n");
@@ -72,7 +75,7 @@ int main(int argc, char *argv[])
  for(;;){
   printf("waiting to receive data from client \n");
   received_bytes = recvfrom(sock, request, MSS,0, (struct sockaddr*)&client_addr, &client_addr_length);
-  if(received_bytes>0){//printf("the request is %s\n", request);
+  if(received_bytes>0){
     get_file_name();
     reply();
   }
@@ -118,8 +121,10 @@ void increment_packets_count(int retransmit){
 void transmit(int index, int retransmit){
   if(nextBool(drop_probability)==-1){ //nextBool(0.5)==0
     not_skipped++;
-    if((file_length-index)<=PAYLOAD){
+    if(((file_length/PAYLOAD)==(index/PAYLOAD))){
       sender.eof = 1;
+    }else{
+      sender.eof = 0;
     }
     prepare_header(headers, sender, PAYLOAD, retransmit);
     response = (char*)calloc(MSS, sizeof(char));
@@ -254,8 +259,6 @@ void send_response(struct rudp_header header_info)
 
  if(file_length<=PAYLOAD){
   prepare_header(headers, sender, strlen(file_contents),0);
-  // strcat(response, headers);
-  // strcat(response, file_contents);
   memcpy(response, headers, HEADER_LENGTH);
   memcpy(&response[HEADER_LENGTH], file_contents, strlen(file_contents));
   sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));

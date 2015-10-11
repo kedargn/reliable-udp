@@ -17,15 +17,31 @@ sender_state sender;
 receiver_state receiver;
 
 struct sockaddr_in server_addr, client_addr;
-char file_name[50] = "cn2.txt", destn_file_name[50]="destn.txt";
+char file_name[50], destn_file_name[50];
 int sock, total_bytes_received = 0, port;
-char* file_contents, server_window;
-float probability = 0.0;
-unsigned char request[100], response[MSS+1], server_ip[30]="127.0.0.1";
+char* file_contents;
+int server_window;
+float latency_probability = 0.0;
+unsigned char request[100], response[MSS+1], server_ip[30];//="127.0.0.1";
 
+void read_args(int argc, char* argv[]){
+  if(argc != 7){
+    printf("Invalid number of arguements\n. Please enter server IP, port no., server window and latency probability\n");
+    exit(1);
+  }
+  strcat(server_ip, argv[1]);
+  port = atoi(argv[2]);
+  server_window = (atoi(argv[3]))*PAYLOAD;
+  latency_probability = atof(argv[4]);
+  strcat(file_name, argv[5]);
+  strcat(destn_file_name, argv[6]);
+  printf("Server IP %s\nServer Port %d\nServer Window %d\nLatency Probability %f\n",server_ip, port, server_window, latency_probability);
+  printf("Source File Name %s\n Destination File Name %s\n", file_name, destn_file_name);
+}
 
 int main(int argc, char* argv[])
 {
+ read_args(argc, argv);
  initialize_state(&sender, server_ip, port);
  initialize_receiver(&receiver);
  printf("Server IP Address %s\nPort %d\nFilename %s\n",server_ip, port, file_name);
@@ -71,7 +87,7 @@ void receive_data()
   if((receiver.next_byte_expected%SEQ_WRAP_UP) == (header_info.seq_no%SEQ_WRAP_UP)){
     // receiver = update_receiver_state(receiver, header_info);
     if(header_info.ack != 1){
-      if(nextBool(0.04)==0){ //nextBool(0.4)==0
+      if(nextBool(latency_probability)==0){
         usleep(500);
         printf("****SLEEP****\n");
       }else{
