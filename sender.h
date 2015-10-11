@@ -45,7 +45,7 @@ void initialize_state(sender_state *sender,char*  destn_ip, int destn_port){
  sender->last_byte_sent = 0;
  sender->last_file_byte_acked = sender->dup_acks = 0;
  sender->dup_ack_byte = -1;
- sender->eof=0;
+ sender->eof = 0;
 }
 
 void prepare_header(unsigned char* header, sender_state state, int data_length, int retransmit){

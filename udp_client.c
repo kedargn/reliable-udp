@@ -18,8 +18,9 @@ receiver_state receiver;
 
 struct sockaddr_in server_addr, client_addr;
 char file_name[50] = "cn2.txt", destn_file_name[50]="destn.txt";
-int sock, total_bytes_received=0, port;
-char* file_contents;
+int sock, total_bytes_received = 0, port;
+char* file_contents, server_window;
+float probability = 0.0;
 unsigned char request[100], response[MSS+1], server_ip[30]="127.0.0.1";
 
 
@@ -70,10 +71,9 @@ void receive_data()
   if((receiver.next_byte_expected%SEQ_WRAP_UP) == (header_info.seq_no%SEQ_WRAP_UP)){
     // receiver = update_receiver_state(receiver, header_info);
     if(header_info.ack != 1){
-      //printf("X is %d\n", simulate);
-      if(1==0){ //nextBool(0.4)==0
-        sleep(0.5);
-        printf("****ACK WILL NOT BE SENT****\n");
+      if(nextBool(0.04)==0){ //nextBool(0.4)==0
+        usleep(500);
+        printf("****SLEEP****\n");
       }else{
         receiver = update_receiver_state(receiver, header_info);
         send_ack();
@@ -88,7 +88,6 @@ void receive_data()
       }
     }
   }
-    //printf("%s\n", &response[9]);
    else if(receiver.next_byte_expected > header_info.seq_no){
     printf("ALREADY RECEIVED SEGMENT\n");
     print_header(header_info);
@@ -99,12 +98,12 @@ void receive_data()
     send_ack();
    }
  }
- fclose(fp);
 }
 
 void print_header(struct rudp_header header_info){
  printf("ack %d, ack_no %d,seq_no %d, data_length %d, eof %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.eof);
 }
+
 void create_socket()
 {
  sock = socket(PF_INET, SOCK_DGRAM, 0);

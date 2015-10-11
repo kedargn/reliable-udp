@@ -68,7 +68,7 @@ struct rudp_header getHeaderInfo(char *bytes){
 
 int nextBool(double probability)
 {
-  return rand() >  probability * ((double)RAND_MAX) ? 0 : -1;
+  return rand() >  probability * ((double)RAND_MAX) ? -1 : 0;
 }
 
 

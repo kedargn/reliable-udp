@@ -1,2 +1,4 @@
 *.out
 *.txt
+stack.c
+dummy.c
