@@ -29,18 +29,32 @@ struct sockaddr_in client_addr;
 int sock, port = 65000, client_window=50*PAYLOAD, cong_window=1*PAYLOAD;
 int congestion_state = SLOW_START, ssthresh = 14630;
 int is_thread = -1, retransmit =-1;
-int client_addr_length, drtt = 0, ertt = 500000, file_length = 0;
+int client_addr_length, drtt = 0, ertt = 0, file_length = 0;
 char request[MSS];// = "GET /persistent.txt HTTP/1.1\nHost: sadsa.dsadsa.com\nConnection: alive\n\n";
 char* response;
 char file_name[50], headers[50];
 char* file_contents;
-int total_packets = 0, retransmitted_packets = 0, slow_start_packets = 0, cong_avoid_packets = 0; 
+int total_packets = 0, retransmitted_packets = 0, slow_start_packets = 0, cong_avoid_packets = 0, sent_file_bytes = 0; 
 sender_state sender;
 packets packets_count;
 struct timeval rtt;
+float drop_probability = 0.0;
+
+int skipped = 0, not_skipped=0;
+
+void read_args(int argc, char *argv[]){
+  if(argc != 4){
+    printf("Invalid number of arguements\n. Please enter port no., client window and drop probability\n");
+    exit(1);
+  }
+  port = atoi(argv[1]);
+  client_window = (atoi(argv[2]))*PAYLOAD;
+  drop_probability = atof(argv[3]);
+  printf("Server port %d\nClient Window %d\nDrop Probability %f\n", port, client_window, drop_probability);
+}
 
 
-int main()
+int main(int argc, char *argv[])
 {
  pthread_t thread1; 
  int received_bytes, file_found;
@@ -48,10 +62,9 @@ int main()
  server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
  server_addr.sin_port = htons(port);
  client_addr_length = sizeof(client_addr); 
- rtt.tv_sec = 0;
- rtt.tv_usec = 500000;
- //printf("enter the PORT number\n");
- //scanf("%d",&port);
+ rtt.tv_sec = 1;
+ rtt.tv_usec = 0;
+ read_args(argc, argv);
  create_socket();
  bind_socket();
  packets_count = initialize_packets_counter(packets_count);
@@ -87,8 +100,9 @@ void print_result(){
   printf("Total Packets Transmitted %d\n", packets_count.total);
   printf("Total Packets Once %d\n", packets_count.once);
   printf("Total Packets Retransmitted %d\n", packets_count.retransmitted);
-  printf("Total Packets in Slow Start %d\n", packets_count.slow_start);
-  printf("Total Packets Congestion Avoidance %d\n", packets_count.cong_avoid);
+  printf("Total Packets in Slow Start %d and percentage %f\n", packets_count.slow_start, ((double)packets_count.slow_start/(double)packets_count.total)*100);
+  printf("Total Packets Congestion Avoidance %d and percentage %f\n\n", packets_count.cong_avoid, ((double)packets_count.cong_avoid/(double)packets_count.total)*100);
+  printf("Number of Dropped Packets %d\n Number of not Dropped Packets %d\n", skipped, not_skipped);
 }
 
 void increment_packets_count(int retransmit){
@@ -102,8 +116,8 @@ void increment_packets_count(int retransmit){
 }
 
 void transmit(int index, int retransmit){
-  if(nextBool(0.00)==-1){ //nextBool(0.5)==0
-    //printf("file length and index is %d and %d\n", file_length, index);
+  if(nextBool(drop_probability)==-1){ //nextBool(0.5)==0
+    not_skipped++;
     if((file_length-index)<=PAYLOAD){
       sender.eof = 1;
     }
@@ -111,11 +125,12 @@ void transmit(int index, int retransmit){
     response = (char*)calloc(MSS, sizeof(char));
     memcpy(response, headers, HEADER_LENGTH);
     memcpy(&response[HEADER_LENGTH], &file_contents[index], PAYLOAD);
-    sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
-    increment_packets_count(retransmit); 
+    sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr)); 
  } else {
   printf("LET US SKIP\n");
+  skipped++;
  }
+ increment_packets_count(retransmit);
 }
 
 void increment_cong_window(){
@@ -158,7 +173,6 @@ void mark_ack(struct rudp_header header_info){
     //printf("OUT OF ORDER ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, eof %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.eof);
     //printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
     transmit(sender.last_file_byte_acked, 1);
-    //wait_for_an_ack();
   }
 }
 void print_header(struct rudp_header header_info){
@@ -166,7 +180,6 @@ void print_header(struct rudp_header header_info){
 }
 
 void calculate_rtt(struct timeval *sent, struct timeval *received){
-  int alpha = 0.125;
   long mseconds = 0;
   mseconds = (received->tv_sec - sent->tv_sec)*1000000;
   mseconds += (received->tv_usec - sent->tv_usec);
@@ -174,7 +187,7 @@ void calculate_rtt(struct timeval *sent, struct timeval *received){
   drtt = (0.75)*drtt + (0.25)*abs(mseconds-ertt);
   mseconds = ertt + 4*drtt;
   rtt.tv_sec=(mseconds/1000000);
-  rtt.tv_usec = (mseconds%1000000);
+  rtt.tv_usec = (mseconds%1000000==0) ? 5000 : (mseconds%1000000);
 }
 
 int wait_for_an_ack(){
@@ -189,9 +202,12 @@ int wait_for_an_ack(){
   gettimeofday(&received, NULL);
   calculate_rtt(&sent, &received);
   if(size<=0){
-    printf("ACK SOCKET TIMEDOUT for %d byte\n",sender.last_file_byte_acked);
+    printf("ACK SOCKET TIMEDOUT for %d byte\n",sender.next_byte_to_be_acked%SEQ_WRAP_UP);
     transmit(sender.last_file_byte_acked,1);
     go_to_slow_start();
+    sent_file_bytes = sender.last_file_byte_acked + PAYLOAD;
+    sender.next_byte = (sent_file_bytes/PAYLOAD)+sent_file_bytes;
+    sender.last_byte_sent = sent_file_bytes;
     return -1;
   }
   else{
@@ -230,7 +246,7 @@ int min(){
 void send_response(struct rudp_header header_info)
 {
   int temp;
- int client_addr_len, sent_file_bytes = 0, i = 1, timeout;
+ int client_addr_len, i = 1, timeout;
  initialize_state(&sender, NULL, 0);
  client_addr_len = sizeof(client_addr);
  response = (char*)calloc(MSS, sizeof(char));
@@ -262,8 +278,6 @@ void send_response(struct rudp_header header_info)
    }
 
    while(sender.last_file_byte_acked < sent_file_bytes){
-    //printf("window is %d\n",client_window);
-    //printf("sender.last_file_byte_acked --> %d sent_file_bytes --> %d\n", sender.last_file_byte_acked, sent_file_bytes);
     timeout = wait_for_an_ack();
    } 
   }
