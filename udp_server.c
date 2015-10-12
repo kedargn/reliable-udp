@@ -213,7 +213,7 @@ void calculate_rtt(struct timeval *sent, struct timeval *received){
   ertt = (1-0.125)*ertt+(0.125)*(mseconds);
   drtt = (0.75)*drtt + (0.25)*abs(mseconds-ertt);
   mseconds = ertt + 4*drtt;
-  rtt.tv_sec=(mseconds/1000000)%4;
+  rtt.tv_sec=(mseconds/1000000);
   rtt.tv_usec = (mseconds%1000000==0) ? 5000 : (mseconds%1000000);
 }
 
