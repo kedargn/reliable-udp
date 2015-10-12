@@ -26,7 +26,7 @@ unsigned char request[100], response[MSS+1], server_ip[30];//="127.0.0.1";
 
 void read_args(int argc, char* argv[]){
   if(argc != 7){
-    printf("Invalid number of arguements\n. Please enter server IP, port no., server window and latency probability\n");
+    printf("Invalid number of arguements\n. Please enter server IP, port no., server window, latency probability, src file name and destination file name\n");
     exit(1);
   }
   strcat(server_ip, argv[1]);
@@ -74,7 +74,7 @@ void send_data(){
 void receive_data()
 {
  FILE *fp;
- printf("File delete result is %d\n",remove(destn_file_name));
+ //printf("File delete result is %d\n",remove(destn_file_name));
  fp = fopen(destn_file_name, "a");
  struct rudp_header ack_header;
  struct rudp_header header_info;
@@ -82,40 +82,42 @@ void receive_data()
  int length;
  int client_addr_length = sizeof(client_addr);
  int bytes_per_request=0;
+ //printf("Receiving file...");
  for(;;)
  {
+  //printf(".");
   bytes_per_request = recvfrom(sock, response, MSS,0, (struct sockaddr*)&client_addr, &client_addr_length);
   response[MSS+1]='\0';
   header_info = getHeaderInfo(response);
-  print_header(header_info);
-  printf("NEXT EXPECTED BYTE %d and ack no%d\n", receiver.next_byte_expected, receiver.next_byte_expected%SEQ_WRAP_UP);
+  //print_header(header_info);
+ // printf("NEXT EXPECTED BYTE %d and ack no%d\n", receiver.next_byte_expected, receiver.next_byte_expected%SEQ_WRAP_UP);
   if((receiver.next_byte_expected%SEQ_WRAP_UP) == (header_info.seq_no%SEQ_WRAP_UP)){
     // receiver = update_receiver_state(receiver, header_info);
     if(header_info.ack != 1){
       if(nextBool(latency_probability)==0){
         usleep(500);
-        printf("****SLEEP****\n");
+        //printf("****SLEEP****\n");
       }else{
         receiver = update_receiver_state(receiver, header_info);
         send_ack();
         fputs(&response[10], fp);
         fflush(fp);
-        // /printf("%s\n", &response[10]);
+        printf("%s\n", &response[10]);
         if(header_info.eof != 0){
           fclose(fp);
-          printf("File Transfer Completed: %s\n", file_name);
+          printf("\n********File Transfer Completed: %s********************\n", file_name);
           exit(1);
         }
       }
     }
   }
    else if(receiver.next_byte_expected > header_info.seq_no){
-    printf("ALREADY RECEIVED SEGMENT\n");
-    print_header(header_info);
+   // printf("ALREADY RECEIVED SEGMENT\n");
+    //print_header(header_info);
     //send_ack();
   } else{
-    printf("OUT OF ORDER SEGMENT. SENDING DUPLICATE ACK\n");
-    print_header(header_info);
+    //printf("OUT OF ORDER SEGMENT. SENDING DUPLICATE ACK\n");
+   // print_header(header_info);
     send_ack();
    }
  }
@@ -162,7 +164,7 @@ void send_ack(){
  ack_header.data_length = 1;
  ack_header.eof = 10;
  makeHeader(header, ack_header);
- printf("***sending following ack***\n");
- print_header(ack_header);
+ // /printf("***sending following ack***\n");
+ // /print_header(ack_header);
  sendto(sock, header, HEADER_LENGTH, 0, (struct sockaddr*)&server_addr, sizeof(server_addr));
 }

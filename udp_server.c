@@ -169,9 +169,9 @@ void increment_cong_window(){
       congestion_state = CONGESTION_AVOIDANCE;
     }
   } else if(congestion_state == CONGESTION_AVOIDANCE){
-    //printf("NOW in CONGESTION_AVOIDANCE\n");
-    increment = ((float)PAYLOAD/cong_window)*PAYLOAD;
-    cong_window += ceil(increment);
+      printf("NOW in CONGESTION_AVOIDANCE\n");
+      increment = ((float)PAYLOAD/cong_window)*PAYLOAD;
+      cong_window += ceil(increment);
     //printf("Congestion window is %d and sstresh is %d\n", cong_window, ssthresh);
   }
 }
@@ -182,7 +182,7 @@ void increment_cong_window(){
 void go_to_slow_start(){
   ssthresh = (cong_window)/2;
   cong_window = 1*PAYLOAD;
-  // printf("SWITCHING to SLOW START\n");
+  printf("SWITCHING to SLOW START\n");
   // printf("Congestion window is %d and sstresh is %d\n", cong_window, ssthresh);
 }
 
@@ -298,14 +298,15 @@ void send_response(struct rudp_header header_info)
  response = (char*)calloc(MSS, sizeof(char));
  file_length = strlen(file_contents);
 
- if(file_length<=PAYLOAD){
-  prepare_header(headers, sender, strlen(file_contents),0);
-  memcpy(response, headers, HEADER_LENGTH);
-  memcpy(&response[HEADER_LENGTH], file_contents, strlen(file_contents));
-  sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
-  sender.last_byte_sent += MSS;
- }
- else {
+ // if(file_length<=PAYLOAD){
+ //  sender.eof = 1;
+ //  prepare_header(headers, sender, strlen(file_contents),0);
+ //  memcpy(response, headers, HEADER_LENGTH);
+ //  memcpy(&response[HEADER_LENGTH], file_contents, strlen(file_contents));
+ //  sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
+ //  sender.last_byte_sent += MSS;
+ // }
+ // else {
   while(sent_file_bytes <= file_length){
    for(i=0;i<min();i++){
     if(sent_file_bytes <= file_length){
@@ -328,7 +329,7 @@ void send_response(struct rudp_header header_info)
   free(response);
   print_result();
   exit(1);
-  }
+  // }
  }
 
 void prep_headers(struct rudp_header header_info)
