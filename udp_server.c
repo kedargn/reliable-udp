@@ -160,19 +160,14 @@ void increment_cong_window(){
   float increment;
   if(congestion_state == SLOW_START){
     cong_window += PAYLOAD;
-    // printf("IN SLOW START\n");
-    // printf("Congestion window is %d\n", cong_window);
-    // printf("Congestion window is %d and sstresh is %d\n", cong_window, ssthresh);
     if(cong_window >= ssthresh){
-      // printf("SWITCHING TO CONGESTION AVOIDANCE\n");
-      // printf("Congestion window is %d and sstresh is %d\n", cong_window, ssthresh);
+      printf("SWITCHING TO CONGESTION AVOIDANCE\n");
       congestion_state = CONGESTION_AVOIDANCE;
     }
   } else if(congestion_state == CONGESTION_AVOIDANCE){
-      printf("NOW in CONGESTION_AVOIDANCE\n");
+      printf("IN CONGESTION AVOIDANCE\n");
       increment = ((float)PAYLOAD/cong_window)*PAYLOAD;
       cong_window += ceil(increment);
-    //printf("Congestion window is %d and sstresh is %d\n", cong_window, ssthresh);
   }
 }
 
@@ -183,7 +178,6 @@ void go_to_slow_start(){
   ssthresh = (cong_window)/2;
   cong_window = 1*PAYLOAD;
   printf("SWITCHING to SLOW START\n");
-  // printf("Congestion window is %d and sstresh is %d\n", cong_window, ssthresh);
 }
 
 /**
@@ -196,12 +190,8 @@ void mark_ack(struct rudp_header header_info){
     sender.last_byte_acked = sender.next_byte_to_be_acked;
     sender.last_file_byte_acked += PAYLOAD;
     sender.next_byte_to_be_acked += PAYLOAD+1;
-    //printf("ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, eof %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.eof);
-    //printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
   }
   else {
-    //printf("OUT OF ORDER ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, eof %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.eof);
-    //printf("NEXT EXPECTED ACK %d\n", sender.next_byte_to_be_acked);
     transmit(sender.last_file_byte_acked, 1);
   }
 }
@@ -235,14 +225,12 @@ int wait_for_an_ack(){
   int size;
   struct rudp_header header_info;
   struct timeval sent, received;
-  printf("seconds is %lu and micro secs %lu\n", rtt.tv_sec, rtt.tv_usec);
   setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&rtt, sizeof(struct timeval));
   gettimeofday(&sent, NULL);
   size = recvfrom(sock, ack_content, MSS,0, (struct sockaddr*)&client_addr, &client_addr_length);
   gettimeofday(&received, NULL);
   calculate_rtt(&sent, &received);
   if(size<=0){
-    printf("ACK SOCKET TIMEDOUT for %d byte\n",sender.next_byte_to_be_acked%SEQ_WRAP_UP);
     transmit(sender.last_file_byte_acked,1);
     go_to_slow_start();
     sent_file_bytes = sender.last_file_byte_acked + PAYLOAD;
@@ -252,8 +240,7 @@ int wait_for_an_ack(){
   }
   else{
     header_info = getHeaderInfo(ack_content);
-    //client_window = header_info.eof;
-    retransmit = -1;                //not retransmitting this segment
+    retransmit = -1;              
     if(header_info.ack==ACK){
      if(sender.next_byte_to_be_acked%SEQ_WRAP_UP == header_info.ack_no) {
       mark_ack(header_info);
@@ -298,19 +285,9 @@ void send_response(struct rudp_header header_info)
  response = (char*)calloc(MSS, sizeof(char));
  file_length = strlen(file_contents);
 
- // if(file_length<=PAYLOAD){
- //  sender.eof = 1;
- //  prepare_header(headers, sender, strlen(file_contents),0);
- //  memcpy(response, headers, HEADER_LENGTH);
- //  memcpy(&response[HEADER_LENGTH], file_contents, strlen(file_contents));
- //  sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
- //  sender.last_byte_sent += MSS;
- // }
- // else {
   while(sent_file_bytes <= file_length){
    for(i=0;i<min();i++){
     if(sent_file_bytes <= file_length){
-      printf("sending file byte %d\n", sent_file_bytes);
       transmit(sent_file_bytes, 0);
       sender.next_byte += PAYLOAD+1;
       sent_file_bytes += PAYLOAD;
@@ -329,7 +306,6 @@ void send_response(struct rudp_header header_info)
   free(response);
   print_result();
   exit(1);
-  // }
  }
 
 void prep_headers(struct rudp_header header_info)
