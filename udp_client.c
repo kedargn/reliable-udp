@@ -74,7 +74,7 @@ void send_data(){
 void receive_data()
 {
  FILE *fp;
- remove(destn_file_name));
+ remove(destn_file_name);
  fp = fopen(destn_file_name, "a");
  struct rudp_header ack_header;
  struct rudp_header header_info;
