@@ -159,6 +159,7 @@ void transmit(int index, int retransmit){
 void increment_cong_window(){
   float increment;
   if(congestion_state == SLOW_START){
+    printf("IN SLOW START\n");
     cong_window += PAYLOAD;
     if(cong_window >= ssthresh){
       printf("SWITCHING TO CONGESTION AVOIDANCE\n");
