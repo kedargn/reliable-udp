@@ -84,21 +84,24 @@ int main(int argc, char *argv[])
  exit(1);
 }
 
- 
+/**
+ * Calls the functions responsible for transfering file to client
+ */ 
 void reply()
 {
  struct rudp_header header_info;
  header_info = getHeaderInfo(request);
- //client_window = header_info.eof;
  if(header_info.ack==1) {
   mark_ack(header_info);
   return;
  }
- printf("CLIENT HEADER-->aw %d\nseq no %d\nack %d\nack_no %d\n data len %d\n", header_info.eof, header_info.seq_no, header_info.ack, header_info.ack_no, header_info.data_length); 
  read_file();
  send_response(header_info);
 }
 
+/**
+ * Prints the result after the file has been transmitted
+ */
 void print_result(){
   printf("Total Packets Transmitted %d\n", packets_count.total);
   printf("Total Packets Once %d\n", packets_count.once);
@@ -108,6 +111,12 @@ void print_result(){
   printf("Number of Dropped Packets %d\n Number of not Dropped Packets %d\n", skipped, not_skipped);
 }
 
+/**
+ * Increments packets count whenever packets are transmitted
+ * Keeps track of packets transmitted in total, retarnsmitted, slow start stage and congestion avoidance stage
+ * @param retransmit:  1 - > Segment is retransmitted
+ *                     0 -> Segment transmitted for first time
+ */
 void increment_packets_count(int retransmit){
   packets_count.total++;
   if(retransmit == 1){
@@ -117,6 +126,13 @@ void increment_packets_count(int retransmit){
   }
   (congestion_state == SLOW_START) ? packets_count.slow_start++ : packets_count.cong_avoid++;
 }
+
+/**
+ * Trasnmits the segment start from index to PAYLOAD bytes from file
+ * @param index: starting byte of file
+ * @param retransmit:  1 - > Segment is retransmitted
+ *                     0 -> Segment transmitted for first time
+ */
 
 void transmit(int index, int retransmit){
   if(nextBool(drop_probability)==-1){ //nextBool(0.5)==0
@@ -132,12 +148,14 @@ void transmit(int index, int retransmit){
     memcpy(&response[HEADER_LENGTH], &file_contents[index], PAYLOAD);
     sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr)); 
  } else {
-  printf("LET US SKIP\n");
   skipped++;
  }
  increment_packets_count(retransmit);
 }
 
+/**
+ * Increments congestion window based on the current congestion stage
+ */ 
 void increment_cong_window(){
   float increment;
   if(congestion_state == SLOW_START){
@@ -158,6 +176,9 @@ void increment_cong_window(){
   }
 }
 
+/**
+ * Routineto shift to slow start in case of timeout event
+ */ 
 void go_to_slow_start(){
   ssthresh = (cong_window)/2;
   cong_window = 1*PAYLOAD;
@@ -165,6 +186,10 @@ void go_to_slow_start(){
   // printf("Congestion window is %d and sstresh is %d\n", cong_window, ssthresh);
 }
 
+/**
+ * Routine to mark the segment as acknowledged
+ * @param: struct rudp_header: Structure contains the acknowledgement header info from client
+ */ 
 void mark_ack(struct rudp_header header_info){
   if(sender.next_byte_to_be_acked%SEQ_WRAP_UP == header_info.ack_no){
     increment_cong_window();
@@ -180,10 +205,16 @@ void mark_ack(struct rudp_header header_info){
     transmit(sender.last_file_byte_acked, 1);
   }
 }
+
+
 void print_header(struct rudp_header header_info){
  //printf("ACK RECEIVED-->ack %d, ack_no %d,seq_no %d, data_length %d, eof %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.eof);
 }
 
+
+/**calculates and updates the RTT
+ * @param sent and received: used to derive sample RTT
+ */ 
 void calculate_rtt(struct timeval *sent, struct timeval *received){
   long mseconds = 0;
   mseconds = (received->tv_sec - sent->tv_sec)*1000000;
@@ -195,6 +226,10 @@ void calculate_rtt(struct timeval *sent, struct timeval *received){
   rtt.tv_usec = (mseconds%1000000==0) ? 5000 : (mseconds%1000000);
 }
 
+/**
+ * Routine waits for acks for timeout interval
+ * In case of timeout it restransmits the segment and calls the routine to shift to slow start stage
+ */
 int wait_for_an_ack(){
   unsigned char ack_content[MSS];
   int size;
@@ -244,10 +279,16 @@ int wait_for_an_ack(){
   }
 }
 
+/** returns minimum of receiver and congestion window
+ */
 int min(){
   return cong_window > client_window ? client_window/PAYLOAD : cong_window/PAYLOAD;
 }
 
+/**
+ * interates through file and sends response based on minimum of receiver and congestion window
+ * slides window as the acknoledgemnts are received
+ */
 void send_response(struct rudp_header header_info)
 {
   int temp;
@@ -325,9 +366,7 @@ void read_file()
 }
 
 /**
- * Helper function to get filename requested in HTTP request
- * if HTTP request is bad then is_request_valid will equated to -1 value
- * else file_name variable will be equated with requested file name
+ * Helper function to get filename requested by client
  **/
 int get_file_name()
 {

@@ -10,6 +10,9 @@
 #define SLOW_START 5
 #define CONGESTION_AVOIDANCE 6
 #define SEQ_WRAP_UP 60025
+
+/** structure which represents the header 
+*/
 struct rudp_header{
  int ack;
  int ack_no;
@@ -18,6 +21,8 @@ struct rudp_header{
  int data_length;
 };
 
+/** Helper function used to create the header
+*/
 void insertBytes(int header_value,unsigned char *header, int first_byte, int second_byte){
  int a=0,b=0,c=0;
  a = (header_value & 65280)>>8;
@@ -29,16 +34,18 @@ void insertBytes(int header_value,unsigned char *header, int first_byte, int sec
  header[second_byte]=b;
 }
 
+/** Helper function used to control the header bytes position
+*/
 void makeHeader(unsigned char* header, struct rudp_header header_info){
- //unsigned char header[9];
  insertBytes(header_info.eof, header,0,1);
  insertBytes(header_info.seq_no, header,2,3);
  insertBytes(header_info.ack, header, 4, 4);
  insertBytes(header_info.ack_no,header, 5, 6);
  insertBytes(header_info.data_length,header, 7,8);
- //return header;
 }
 
+/** Used to get header bytes at receiver side
+*/
 int getBytes(unsigned char* bytes,int first_byte_pos, int second_byte_pos){
  int c, d;
  c = bytes[first_byte_pos];
@@ -56,6 +63,9 @@ int getBytes(unsigned char* bytes,int first_byte_pos, int second_byte_pos){
  return c;
 }
 
+/** transforms the bytes in header to structure(rudp_header)
+@param bytes: the buffer containing header bytes
+*/
 struct rudp_header getHeaderInfo(char *bytes){
  struct rudp_header header_info;
  header_info.eof = getBytes(bytes, 0, 1);
@@ -66,6 +76,8 @@ struct rudp_header getHeaderInfo(char *bytes){
  return header_info;
 }
 
+/** probability function
+*/
 int nextBool(double probability)
 {
   return (rand() >  probability * (double)RAND_MAX) ? -1 : 0;

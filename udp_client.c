@@ -54,7 +54,9 @@ int main(int argc, char* argv[])
  close(sock);
 }
 
-
+/**
+ * used to formulate the intial request to client
+ */
 void send_data(){
  unsigned char header[HEADER_LENGTH];
  prepare_header(header, sender, strlen(file_name), 0);
@@ -65,9 +67,12 @@ void send_data(){
  sender = update_sender(sender, strlen(header)+strlen(file_name));
 }
 
+/** received data from server
+ * sends positive ack if in order segment is received
+ * sends duplicate ack is out of order segment is received
+ */ 
 void receive_data()
 {
- //file_name = (char*)malloc()
  FILE *fp;
  printf("File delete result is %d\n",remove(destn_file_name));
  fp = fopen(destn_file_name, "a");
@@ -120,6 +125,8 @@ void print_header(struct rudp_header header_info){
  printf("ack %d, ack_no %d,seq_no %d, data_length %d, eof %d\n",header_info.ack,header_info.ack_no,header_info.seq_no,header_info.data_length, header_info.eof);
 }
 
+/** creates the socket
+ */
 void create_socket()
 {
  sock = socket(PF_INET, SOCK_DGRAM, 0);
@@ -141,6 +148,9 @@ if(result<0)
  }
 }
 
+
+/** when in order segment is recevied, this is used to send acknoledgement to server
+*/
 void send_ack(){
  struct rudp_header ack_header;
  unsigned char header[HEADER_LENGTH];
