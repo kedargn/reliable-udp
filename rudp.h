@@ -9,6 +9,7 @@
 #define ACK 1
 #define SLOW_START 5
 #define CONGESTION_AVOIDANCE 6
+#define FAST_RECOVERY 7
 #define SEQ_WRAP_UP 60025
 
 /** structure which represents the header 

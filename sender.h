@@ -22,10 +22,11 @@ typedef struct sender_state_variables{
 /** structure to maintain the packets count sent by sender
 */
 typedef struct sender_packets{
- int total;
+ long total;
  int retransmitted;
- int slow_start;
- int cong_avoid;
+ long slow_start;
+ long cong_avoid;
+ long fast_recovery;
  int once;
 }packets;
 

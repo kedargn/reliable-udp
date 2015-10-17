@@ -103,11 +103,12 @@ void reply()
  * Prints the result after the file has been transmitted
  */
 void print_result(){
-  printf("Total Packets Transmitted %d\n", packets_count.total);
+  printf("Total Packets Transmitted %lu\n", packets_count.total);
   printf("Total Packets Once %d\n", packets_count.once);
   printf("Total Packets Retransmitted %d\n", packets_count.retransmitted);
-  printf("Total Packets in Slow Start %d and percentage %f\n", packets_count.slow_start, ((double)packets_count.slow_start/(double)packets_count.total)*100);
-  printf("Total Packets Congestion Avoidance %d and percentage %f\n\n", packets_count.cong_avoid, ((double)packets_count.cong_avoid/(double)packets_count.total)*100);
+  printf("Total Packets in Slow Start %lu and percentage %f\n", packets_count.slow_start, ((double)packets_count.slow_start/(double)packets_count.total)*100);
+  printf("Total Packets Congestion Avoidance %lu and percentage %f\n\n", packets_count.cong_avoid, ((double)packets_count.cong_avoid/(double)packets_count.total)*100);
+  printf("Total Packets Fast Recovery %lu and percentage %f\n\n", packets_count.fast_recovery, ((double)packets_count.fast_recovery/(double)packets_count.total)*100);
   printf("Number of Dropped Packets %d\n Number of not Dropped Packets %d\n", skipped, not_skipped);
 }
 
@@ -124,7 +125,7 @@ void increment_packets_count(int retransmit){
   } else{
     packets_count.once++;
   }
-  (congestion_state == SLOW_START) ? packets_count.slow_start++ : packets_count.cong_avoid++;
+  (congestion_state == SLOW_START) ? packets_count.slow_start++ : ((congestion_state == FAST_RECOVERY) ? packets_count.fast_recovery++ : packets_count.cong_avoid++);
 }
 
 /**
@@ -176,6 +177,8 @@ void increment_cong_window(){
  * Routineto shift to slow start in case of timeout event
  */ 
 void go_to_slow_start(){
+  sender.dup_acks = 0;
+  sender.dup_ack_byte = -1;
   ssthresh = (cong_window)/2;
   cong_window = 1*PAYLOAD;
   printf("SWITCHING to SLOW START\n");
@@ -244,6 +247,12 @@ int wait_for_an_ack(){
     retransmit = -1;              
     if(header_info.ack==ACK){
      if(sender.next_byte_to_be_acked%SEQ_WRAP_UP == header_info.ack_no) {
+      if(congestion_state == FAST_RECOVERY){
+        sender.dup_acks = 0;
+        sender.dup_ack_byte = -1;
+        congestion_state = CONGESTION_AVOIDANCE;
+        cong_window = ssthresh;
+      }
       mark_ack(header_info);
       return 0;
     }else {
@@ -251,15 +260,20 @@ int wait_for_an_ack(){
         sender.dup_ack_byte = header_info.ack_no;
         sender.dup_acks++;
       }else if(sender.dup_ack_byte == header_info.ack_no) {
-        sender.dup_acks++;
+        ((sender.dup_acks >= 3) ? sender.dup_acks : sender.dup_acks++);
       }else{
        sender.dup_ack_byte = header_info.ack_no; 
        sender.dup_acks = 1;
       }
       if(sender.dup_acks == 3){
-        transmit(sender.last_file_byte_acked,1);
-        sender.dup_acks = 0;
-        sender.dup_ack_byte = -1;
+        if(congestion_state == FAST_RECOVERY){
+          cong_window += 1*PAYLOAD;
+        } else {
+        congestion_state = FAST_RECOVERY;
+        ssthresh = (cong_window)/2;
+        cong_window = ssthresh + (3*PAYLOAD);
+        }
+        transmit(sender.last_file_byte_acked,1);   
       }
       return -1;
     }
