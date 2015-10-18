@@ -95,7 +95,7 @@ void receive_data()
     // receiver = update_receiver_state(receiver, header_info);
     if(header_info.ack != 1){
       if(nextBool(latency_probability)==0){
-        usleep(500);
+        usleep(rand()%10000);
         //printf("****SLEEP****\n");
       }else{
         receiver = update_receiver_state(receiver, header_info);
@@ -103,9 +103,13 @@ void receive_data()
         fputs(&response[10], fp);
         fflush(fp);
         printf("%s\n", &response[10]);
-        if(header_info.eof != 0){
+        if(header_info.eof == 1){
           fclose(fp);
           printf("\n********File Transfer Completed: %s********************\n", file_name);
+          exit(1);
+        }
+        else if(header_info.eof == 2){
+          printf("\nFILE DO NOT EXISTS\n");
           exit(1);
         }
       }

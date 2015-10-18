@@ -34,13 +34,12 @@ char request[MSS];// = "GET /persistent.txt HTTP/1.1\nHost: sadsa.dsadsa.com\nCo
 char* response;
 char file_name[50], headers[50];
 char* file_contents;
-int total_packets = 0, retransmitted_packets = 0, slow_start_packets = 0, cong_avoid_packets = 0, sent_file_bytes = 0; 
 sender_state sender;
 packets packets_count;
 struct timeval rtt;
 float drop_probability = 0.0;
-
-int skipped = 0, not_skipped=0;
+int sent_file_bytes;
+int skipped = 0, not_skipped=0, file_found = 0;
 
 /**
  * checks and assigns the command line arguments
@@ -60,7 +59,10 @@ void read_args(int argc, char *argv[]){
 int main(int argc, char *argv[])
 {
  pthread_t thread1; 
- int received_bytes, file_found;
+ int received_bytes;
+ struct timeval reset;
+ reset.tv_sec = 0;
+ reset.tv_usec = 0;
  server_addr.sin_family = AF_INET;
  server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
  server_addr.sin_port = htons(port);
@@ -74,6 +76,7 @@ int main(int argc, char *argv[])
  printf("SOCKET RUNNING AT PORT %d\n", port);
  for(;;){
   printf("waiting to receive data from client \n");
+  setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (char*)&reset, sizeof(struct timeval));
   received_bytes = recvfrom(sock, request, MSS,0, (struct sockaddr*)&client_addr, &client_addr_length);
   if(received_bytes>0){
     get_file_name();
@@ -99,6 +102,26 @@ void reply()
  send_response(header_info);
 }
 
+/** After server request one file it clears all the variables to serve the next request
+**/
+
+void clear_variables(){
+  cong_window=1*PAYLOAD;
+  congestion_state = SLOW_START; 
+  ssthresh = 64000;
+  drtt = 0; ertt = 0; file_length = 0;
+  memset(request, 0, sizeof(request));
+  memset(file_name, 0, sizeof(file_name));
+  memset(headers, 0, sizeof(headers));
+  packets_count =  initialize_packets_counter(packets_count);
+  initialize_state(&sender, NULL, 0);
+  rtt.tv_sec = 1;
+  rtt.tv_usec = 0;
+  skipped = 0, not_skipped=0;
+  sent_file_bytes = 0;
+  file_found = 0;
+}
+
 /**
  * Prints the result after the file has been transmitted
  */
@@ -108,7 +131,6 @@ void print_result(){
   printf("Total Packets Retransmitted %d\n", packets_count.retransmitted);
   printf("Total Packets in Slow Start %lu and percentage %f\n", packets_count.slow_start, ((double)packets_count.slow_start/(double)packets_count.total)*100);
   printf("Total Packets Congestion Avoidance %lu and percentage %f\n\n", packets_count.cong_avoid, ((double)packets_count.cong_avoid/(double)packets_count.total)*100);
-  printf("Total Packets Fast Recovery %lu and percentage %f\n\n", packets_count.fast_recovery, ((double)packets_count.fast_recovery/(double)packets_count.total)*100);
   printf("Number of Dropped Packets %d\n Number of not Dropped Packets %d\n", skipped, not_skipped);
 }
 
@@ -148,6 +170,7 @@ void transmit(int index, int retransmit){
     memcpy(response, headers, HEADER_LENGTH);
     memcpy(&response[HEADER_LENGTH], &file_contents[index], PAYLOAD);
     sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr)); 
+    free(response);
  } else {
   skipped++;
  }
@@ -287,6 +310,16 @@ int min(){
   return cong_window > client_window ? client_window/PAYLOAD : cong_window/PAYLOAD;
 }
 
+void send_error(){
+  sender.eof = 2;
+  prepare_header(headers, sender, PAYLOAD, retransmit);
+  response = (char*)calloc(MSS, sizeof(char));
+  memcpy(response, headers, HEADER_LENGTH);
+  memcpy(&response[HEADER_LENGTH], "FILE NOT FOUND", PAYLOAD);
+  sendto(sock, response, MSS, 0, (struct sockaddr*)&client_addr, sizeof(client_addr)); 
+  free(response);
+}
+
 /**
  * interates through file and sends response based on minimum of receiver and congestion window
  * slides window as the acknoledgemnts are received
@@ -297,8 +330,14 @@ void send_response(struct rudp_header header_info)
  int client_addr_len, i = 1, timeout;
  initialize_state(&sender, NULL, 0);
  client_addr_len = sizeof(client_addr);
- response = (char*)calloc(MSS, sizeof(char));
  file_length = strlen(file_contents);
+ if(file_found == -1){
+  send_error();
+  print_result();
+  clear_variables();
+  free(file_contents);
+  return;
+ }
 
   while(sent_file_bytes <= file_length){
    for(i=0;i<min();i++){
@@ -318,9 +357,10 @@ void send_response(struct rudp_header header_info)
     timeout = wait_for_an_ack();
    } 
   }
-  free(response);
   print_result();
-  exit(1);
+  clear_variables();
+  free(file_contents);
+  //exit(1);
  }
 
 void prep_headers(struct rudp_header header_info)
@@ -343,8 +383,10 @@ void read_file()
  fp = fopen(file_name, "r");
  if(fp == NULL){
   printf("FILE NOT FOUND\n");
+  file_found = -1;
   return;
  }
+ file_found = 0;
  while((ch=getc(fp))!=EOF)
  {
   file_contents[i++] = ch;
