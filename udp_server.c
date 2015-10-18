@@ -203,7 +203,8 @@ void go_to_slow_start(){
   sender.dup_acks = 0;
   sender.dup_ack_byte = -1;
   ssthresh = (cong_window)/2;
-  cong_window = 1*PAYLOAD;
+  cong_window = PAYLOAD;
+  congestion_state = SLOW_START;
   printf("SWITCHING to SLOW START\n");
 }
 
@@ -259,6 +260,7 @@ int wait_for_an_ack(){
   calculate_rtt(&sent, &received);
   if(size<=0){
     transmit(sender.last_file_byte_acked,1);
+    sender.last_retransmitted_byte = (sender.last_byte_acked%SEQ_WRAP_UP);
     go_to_slow_start();
     sent_file_bytes = sender.last_file_byte_acked + PAYLOAD;
     sender.next_byte = (sent_file_bytes/PAYLOAD)+sent_file_bytes;
@@ -275,6 +277,10 @@ int wait_for_an_ack(){
         sender.dup_ack_byte = -1;
         congestion_state = CONGESTION_AVOIDANCE;
         cong_window = ssthresh;
+      }
+      if(header_info.ack_no != ((sender.last_retransmitted_byte+PAYLOAD+1)%SEQ_WRAP_UP)){
+        sender.last_retransmitted_byte = -1;
+        calculate_rtt(&sent, &received);
       }
       mark_ack(header_info);
       return 0;

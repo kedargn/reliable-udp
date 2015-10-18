@@ -13,6 +13,7 @@ typedef struct sender_state_variables{
  int next_byte_to_be_acked;
  int last_byte_sent;
  int last_file_byte_acked;
+ int last_retransmitted_byte;
  int next_byte;
  int dup_acks;
  int dup_ack_byte;
@@ -56,6 +57,7 @@ void initialize_state(sender_state *sender,char*  destn_ip, int destn_port){
  sender->last_file_byte_acked = sender->dup_acks = 0;
  sender->dup_ack_byte = -1;
  sender->eof = 0;
+ sender->last_retransmitted_byte = -1;
 }
 
 /** prepares the header required by sender
